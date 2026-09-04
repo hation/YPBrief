@@ -19,6 +19,7 @@ YPBrief 是一个自托管的 YouTube 播客与长视频简报工具。它会定
 - Web UI 提供来源管理、手动运行、定时任务、视频总结、日报历史、提示词和模型配置。
 - 支持 Docker/VPS 常驻部署，也支持 GitHub Actions Lite 无服务器定时运行。
 - 本地保存处理记录，后续生成日报时可复用已处理过的视频总结。
+- 默认提示词强制简体中文：无论视频原始语言是中文、英文还是其他语言，单视频总结和每日简报一律用简体中文输出。
 
 ## 适合谁
 
@@ -196,6 +197,26 @@ run.bat
 API:    http://127.0.0.1:48787
 Web UI: http://127.0.0.1:45173
 ```
+
+### 不启动 Web UI，直接运行完整日报
+
+Web UI 的“立即运行”和后台定时任务走的是 `DigestRunService.run()` 完整流水线；而命令行 `ypbrief daily summarize` 只能按 id 合并已经总结过的视频。如果你不想启动 Web UI，可以用仓库里的脚本直接跑完整流水线：
+
+```bash
+.venv/bin/python scripts/run_digest_local.py --window last_7 --env-file key.env
+```
+
+脚本从本地 SQLite 读取启用中的来源，走完整流程：发现新视频 -> 抓取字幕 -> LLM 单视频总结 -> 合成每日简报，并可选推送到 Telegram / 飞书 / Email。常用参数：
+
+- `--window last_1 | last_3 | last_7 | all_time`：新视频回溯窗口（默认 `last_1`）
+- `--run-date YYYY-MM-DD`：指定摘要日期（默认今天）
+- `--group <group_name>`：只处理某个来源分组
+- `--max-videos-per-source N`：每个来源最多处理的视频数（默认 10）
+- `--language zh|en`：简报语言（默认 `zh`）
+- `--send-empty`：当天没有新视频时也推送“无更新”通知
+- `--dry-run`：只发现视频，不调用 LLM、不推送
+
+另外两个脚本用于维护“强制中文”提示词：`scripts/apply_zh_prompts.py` 把默认中文提示词写入本地数据库（等效于 Web UI Prompts 页面的保存操作），`scripts/patch_prompts_py.py` 用于替换 `src/ypbrief/prompts.py` 里的默认提示词代码块。
 
 ## Docker 部署
 

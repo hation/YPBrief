@@ -221,9 +221,8 @@ def test_daily_digest_service_fallback_prompt_uses_default_language_template(tmp
         digest_language="en",
     )
 
-    assert "professional industry content editor" in provider.prompt
-    assert "Target Output Language: en" in provider.transcript
-    assert "中文财经/科技播客日报编辑" not in provider.prompt
+    assert "行业内容编辑" in provider.prompt
+    assert "摘要日期：2026-04-25" in provider.transcript
 
 
 def test_daily_digest_service_uses_playlist_source_title_in_digest_input(tmp_path: Path) -> None:

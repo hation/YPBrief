@@ -19,6 +19,7 @@ It is designed for people who follow recurring information sources over time, su
 - The Web UI provides source management, manual runs, scheduled jobs, video summaries, digest history, prompts, and model configuration.
 - Supports always-on Docker/VPS deployment and no-server GitHub Actions Lite.
 - Keeps local processing records so later digest runs can reuse already processed video summaries.
+- The default prompts force Simplified Chinese output: no matter whether the source language is Chinese, English, or another language, single-video summaries and daily briefs are always written in Simplified Chinese.
 
 ## Who It Is For
 
@@ -196,6 +197,26 @@ Default URLs:
 API:    http://127.0.0.1:48787
 Web UI: http://127.0.0.1:45173
 ```
+
+### Run a Full Daily Digest Without the Web UI
+
+The Web UI's "Run now" button and background scheduled jobs use the full `DigestRunService.run()` pipeline, while the CLI command `ypbrief daily summarize` can only combine videos that have already been summarized by id. If you do not want to start the Web UI, you can run the full pipeline directly with the script in this repository:
+
+```bash
+.venv/bin/python scripts/run_digest_local.py --window last_7 --env-file key.env
+```
+
+The script reads enabled sources from the local SQLite database and runs the complete flow: discover new videos -> fetch subtitles -> LLM single-video summaries -> synthesize the daily digest, optionally pushing results to Telegram / Feishu / Email. Common options:
+
+- `--window last_1 | last_3 | last_7 | all_time`: lookback window for new videos (default `last_1`)
+- `--run-date YYYY-MM-DD`: digest date (default: today)
+- `--group <group_name>`: only process sources in a specific group
+- `--max-videos-per-source N`: max videos per source (default 10)
+- `--language zh|en`: digest language (default `zh`)
+- `--send-empty`: also push a "no updates" notice when nothing is included
+- `--dry-run`: only discover videos, do not call the LLM or push
+
+Two other scripts help maintain the force-Chinese prompts: `scripts/apply_zh_prompts.py` writes the default Chinese prompts into the local database (equivalent to saving on the Web UI Prompts page), and `scripts/patch_prompts_py.py` replaces the default prompt block in `src/ypbrief/prompts.py`.
 
 ## Docker Deployment
 

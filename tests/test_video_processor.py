@@ -56,7 +56,7 @@ class FakeProvider:
     model = "fake-model"
 
     def summarize(self, prompt: str, transcript: str) -> str:
-        assert "professional content research editor" in prompt
+        assert "内容研究编辑" in prompt
         assert "Episode 1" in transcript
         assert "hello world" in transcript
         return "# Summary\n\nhello summary"

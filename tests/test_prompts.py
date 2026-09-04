@@ -28,11 +28,11 @@ def test_daily_digest_default_prompt_separates_current_synthesis_and_forward_wat
 
     daily = service.get("daily_digest")
 
-    assert "what the situation is right now" in daily["user_template"]
-    assert "What to watch" in daily["user_template"]
-    assert "how to verify it" in daily["user_template"]
-    assert "Use the provided single-video summaries as the primary source" in daily["user_template"]
-    assert "Do not introduce new claims or details" in daily["user_template"]
+    assert "当前状况是什么" in daily["user_template"]
+    assert "关注什么" in daily["user_template"]
+    assert "如何验证" in daily["user_template"]
+    assert "以提供的单条视频总结为主要来源" in daily["user_template"]
+    assert "不要引入来源摘要之外的新主张或细节" in daily["user_template"]
 
 
 def test_video_summary_default_prompt_emphasizes_core_summary_and_decision_value(tmp_path: Path) -> None:
@@ -41,13 +41,13 @@ def test_video_summary_default_prompt_emphasizes_core_summary_and_decision_value
 
     video = service.get("video_summary")
 
-    assert "Write 2-3 clear sentences" in video["user_template"]
-    assert "List 4-6 bullet points" in video["user_template"]
-    assert "Each point can be 1-2 sentences if needed" in video["user_template"]
-    assert "# Timeline" in video["user_template"]
-    assert "List 3-7 timestamped checkpoints" in video["user_template"]
-    assert "Why this matters to investors, decision-makers, or the target audience" in video["user_template"]
-    assert "If the implications are limited or uncertain" in video["user_template"]
+    assert "用 2-3 句清晰的话说明" in video["user_template"]
+    assert "列出 4-6 条最重要的收获要点" in video["user_template"]
+    assert "每条可 1-2 句" in video["user_template"]
+    assert "# 时间线" in video["user_template"]
+    assert "列出 3-7 个带时间戳的关键节点" in video["user_template"]
+    assert "聚焦行业、市场、政策、投资影响" in video["user_template"]
+    assert "如果影响有限或不确定" in video["user_template"]
 
 
 def test_prompt_file_service_preview_rejects_unknown_variable(tmp_path: Path) -> None:
