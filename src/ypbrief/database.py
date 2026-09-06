@@ -58,6 +58,7 @@ class Database:
                     channel_name TEXT,
                     playlist_id TEXT,
                     enabled INTEGER NOT NULL DEFAULT 1,
+                    importance TEXT NOT NULL DEFAULT 'normal',
                     last_checked_at TEXT,
                     last_error TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -90,6 +91,9 @@ class Database:
                     video_date TEXT,
                     duration INTEGER,
                     status TEXT NOT NULL DEFAULT 'new',
+                    selection_status TEXT NOT NULL DEFAULT 'pending',
+                    triage_score REAL,
+                    triage_at TEXT,
                     transcript_raw_json TEXT,
                     transcript_raw_vtt TEXT,
                     transcript_clean TEXT,
@@ -313,6 +317,7 @@ class Database:
             _ensure_column(conn, "ScheduledJobs", "feishu_enabled", "INTEGER NOT NULL DEFAULT 0")
             _ensure_column(conn, "DeliverySettings", "feishu_enabled", "INTEGER NOT NULL DEFAULT 0")
             _ensure_column(conn, "DeliverySettings", "feishu_webhook_url", "TEXT")
+            self._ensure_triage_columns(conn)
             _ensure_column(conn, "DeliverySettings", "feishu_secret", "TEXT")
             conn.execute("UPDATE ScheduledJobs SET window_mode = 'last_7' WHERE window_mode = 'last_5'")
             for provider, model in _LEGACY_BUILTIN_PROVIDER_MODELS.items():
@@ -336,6 +341,18 @@ class Database:
                 """
             )
 
+    def _ensure_triage_columns(self, conn: sqlite3.Connection) -> None:
+        migrations = [
+            ("Sources", "importance", "TEXT NOT NULL DEFAULT 'normal'"),
+            ("Videos", "selection_status", "TEXT NOT NULL DEFAULT 'pending'"),
+            ("Videos", "triage_score", "REAL"),
+            ("Videos", "triage_at", "TEXT"),
+        ]
+        for table, column, ddl in migrations:
+            existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+            if column not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+
     def upsert_source(
         self,
         source_type: str,
@@ -347,15 +364,16 @@ class Database:
         channel_name: str | None = None,
         playlist_id: str | None = None,
         enabled: bool = True,
+        importance: str = "normal",
     ) -> int:
         with self.connect() as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO Sources(
                     source_type, source_name, display_name, youtube_id, url,
-                    channel_id, channel_name, playlist_id, enabled
+                    channel_id, channel_name, playlist_id, enabled, importance
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(source_type, youtube_id) DO UPDATE SET
                     source_name=excluded.source_name,
                     display_name=excluded.display_name,
@@ -364,6 +382,7 @@ class Database:
                     channel_name=excluded.channel_name,
                     playlist_id=excluded.playlist_id,
                     enabled=excluded.enabled,
+                    importance=excluded.importance,
                     updated_at=CURRENT_TIMESTAMP
                 RETURNING source_id
                 """,
@@ -377,6 +396,7 @@ class Database:
                     channel_name,
                     playlist_id,
                     1 if enabled else 0,
+                    importance,
                 ),
             )
             return int(cursor.fetchone()["source_id"])
@@ -439,6 +459,56 @@ class Database:
                 WHERE source_id = ?
                 """,
                 (1 if enabled else 0, source_id),
+            )
+            if cursor.rowcount == 0:
+                raise KeyError(source_id)
+
+    def set_video_selection_status(self, video_id: str, selection_status: str) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE Videos
+                SET selection_status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE video_id = ?
+                """,
+                (selection_status, video_id),
+            )
+
+    def set_video_triage(self, video_id: str, score: float | None) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE Videos
+                SET triage_score = ?, triage_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE video_id = ?
+                """,
+                (score, video_id),
+            )
+
+    def list_videos_by_selection_status(self, selection_status: str, limit: int = 200) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT v.*, c.channel_name
+                FROM Videos v
+                JOIN Channels c ON c.channel_id = v.channel_id
+                WHERE v.selection_status = ?
+                ORDER BY COALESCE(v.video_date, '') DESC, v.created_at DESC
+                LIMIT ?
+                """,
+                (selection_status, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def update_source_importance(self, source_id: int, importance: str) -> None:
+        with self.connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE Sources
+                SET importance = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE source_id = ?
+                """,
+                (importance, source_id),
             )
             if cursor.rowcount == 0:
                 raise KeyError(source_id)
