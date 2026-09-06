@@ -3056,3 +3056,64 @@ def test_api_triage_candidates_and_select_and_summarize(tmp_path: Path) -> None:
 
     missing = client.post("/api/videos/select", json={"video_ids": ["nope"]})
     assert missing.status_code == 404
+
+
+def test_telegram_webhook_selects_by_numbers(tmp_path: Path, monkeypatch) -> None:
+    db = Database(tmp_path / "ypbrief.db")
+    db.initialize()
+    db.upsert_channel("UC123", "Test Channel", "https://youtube.com/channel/UC123")
+    db.upsert_video("vid1", "UC123", "Episode 1", "https://youtu.be/vid1", video_date="2026-04-25")
+    db.upsert_video("vid2", "UC123", "Episode 2", "https://youtu.be/vid2", video_date="2026-04-24")
+    db.set_video_selection_status("vid1", "pending")
+    db.set_video_selection_status("vid2", "pending")
+    client = TestClient(
+        create_app(
+            db=db,
+            settings_override={
+                "telegram_bot_inbox_enabled": "true",
+                "telegram_bot_webhook_secret": "sec",
+                "telegram_bot_allowed_chat_ids": "123",
+                "telegram_bot_token": "bot:token",
+            },
+        )
+    )
+    replies: list[str] = []
+    monkeypatch.setattr(
+        app_module,
+        "_send_telegram_text",
+        lambda token, chat_id, text, parse_mode=None: replies.append(text),
+        raising=False,
+    )
+
+    class FakeProvider:
+        name = "fake"
+        model = "fake-model"
+
+        def summarize(self, prompt: str, transcript: str) -> str:
+            return "summary"
+
+    monkeypatch.setattr(app_module, "_provider_from_settings", lambda db, settings: FakeProvider())
+
+    from ypbrief.summarizer import Summarizer
+
+    monkeypatch.setattr(Summarizer, "summarize_video", lambda self, video_id: 999)
+
+    # 无链接且是编号 → 选中 vid2（第2条）并总结
+    resp = client.post(
+        "/api/telegram/webhook/sec",
+        json={"message": {"chat": {"id": 123}, "from": {"id": 1}, "text": "2"}},
+        headers={"X-Telegram-Bot-Api-Secret-Token": ""},
+    )
+    assert resp.status_code == 200
+    assert db.get_video("vid2")["selection_status"] == "selected"
+    assert db.get_video("vid1")["selection_status"] == "pending"
+    assert any("已选中" in r for r in replies)
+
+    # 非法编号 → 引导
+    replies.clear()
+    resp2 = client.post(
+        "/api/telegram/webhook/sec",
+        json={"message": {"chat": {"id": 123}, "from": {"id": 1}, "text": "99"}},
+        headers={"X-Telegram-Bot-Api-Secret-Token": ""},
+    )
+    assert any("编号无效" in r for r in replies)

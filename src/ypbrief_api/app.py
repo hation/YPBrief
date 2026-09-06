@@ -1116,7 +1116,10 @@ def create_app(
 
         video_url = _extract_first_youtube_url(text)
         if not video_url:
-            _telegram_reply(settings, chat_id, "请发送一个 YouTube 视频链接，我会自动抓取字幕并生成总结。")
+            handled = _telegram_handle_number_selection(settings, db, chat_id, text)
+            if handled is not None:
+                return handled
+            _telegram_reply(settings, chat_id, "请发送一个 YouTube 视频链接，或回复待选清单中的编号（如 1 3 5）来选中要总结的视频。")
             return {"status": "ignored", "reason": "no_youtube_url"}
 
         _telegram_reply(settings, chat_id, "已收到视频链接，正在处理...")
@@ -2302,12 +2305,50 @@ YOUTUBE_URL_RE = re.compile(
     re.IGNORECASE,
 )
 
+TRIAGE_NUMBERS_RE = re.compile(r"^\s*\d+(\s*[,，\s]\s*\d+)*\s*$")
+
 
 def _extract_first_youtube_url(text: str) -> str | None:
     match = YOUTUBE_URL_RE.search(text or "")
     if not match:
         return None
     return match.group(0).rstrip(").,，。")
+
+
+def _telegram_handle_number_selection(settings: Settings, db: Database, chat_id: str, text: str) -> dict[str, Any] | None:
+    if not TRIAGE_NUMBERS_RE.match(text or ""):
+        return None
+    candidates = db.list_videos_by_selection_status("pending", limit=200)
+    if not candidates:
+        _telegram_reply(settings, chat_id, "当前没有待选视频。")
+        return {"status": "ignored", "reason": "no_pending"}
+    numbers = [int(part) for part in re.findall(r"\d+", text)]
+    valid = [number for number in numbers if 1 <= number <= len(candidates)]
+    if not valid:
+        _telegram_reply(settings, chat_id, f"编号无效，请回复 1-{len(candidates)}。")
+        return {"status": "ignored", "reason": "invalid_numbers"}
+    selected = [candidates[number - 1] for number in sorted(set(valid))]
+    for video in selected:
+        db.set_video_selection_status(video["video_id"], "selected")
+    _telegram_reply(settings, chat_id, f"已选中 {len(selected)} 条视频，正在生成总结...")
+    done: list[str] = []
+    failed: list[str] = []
+    for video in selected:
+        try:
+            from ypbrief.summarizer import Summarizer
+
+            summary_id = Summarizer(db, _provider_from_settings(db, settings), settings=settings).summarize_video(video["video_id"])
+            done.append(f"- {video.get('video_title') or video['video_id']}（总结 #{summary_id}）")
+        except Exception:
+            failed.append(video.get("video_title") or video["video_id"])
+    if done:
+        reply = f"已完成 {len(done)} 条总结：\n" + "\n".join(done)
+        if failed:
+            reply += f"\n{len(failed)} 条失败：{', '.join(failed)}"
+        _telegram_reply(settings, chat_id, reply)
+    elif failed:
+        _telegram_reply(settings, chat_id, "所选视频总结全部失败，请到 Web UI 查看详情。")
+    return {"status": "selected", "selected": len(selected), "summarized": len(done), "failed": len(failed)}
 
 
 def _telegram_sender_allowed(settings: Settings, chat_id: str, user_id: str) -> bool:
