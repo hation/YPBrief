@@ -10,6 +10,35 @@
 
 ---
 
+## 实施状态（2026-09-06 已执行完毕）
+
+本计划 6 个 Task 已全部按 TDD 落地并合入 main。提交链：
+
+| 提交 | 对应 Task | 内容 |
+| --- | --- | --- |
+| `0d45a56` | Task 1 | db：triage 列 + importance 分级 + 幂等迁移 |
+| `8128c35` | Task 2 | triage：`video_triage` 提示词 + `TriageService` |
+| `850887a` | Task 3 | daily：`DigestRunService` 三分流 + 候选清单 |
+| `9700751` | Task 4 | api：待选查询 + `POST /api/videos/select` |
+| `f96d517` | Task 5 | api：Telegram 回复编号选择 |
+| `1301811` | Task 6 | delivery：自动任务后推送待选清单 |
+
+### 与计划的偏差（均已按实际调整）
+
+| Task | 偏差 | 处理 |
+| --- | --- | --- |
+| Task 2 | 新增默认提示词后，`tests/test_prompts.py` 硬编码 `len(prompts) == 2` 失败 | 同步改为 `== 3` |
+| Task 3 | 计划测试的 `TierYouTube` 缺少 `resolve_channel`（channel 来源发现会调用） | 测试类补该方法 |
+| Task 3 | 默认 `normal` 后，10 个旧 run 测试的"全量自动总结"断言失效 | 旧测试 `upsert_source` 补 `importance="important"`，保留"重要频道自动总结"语义 |
+| Task 5 | 文件既有 webhook 测试用 `_send_telegram_text` 打桩而非计划的 `_post_telegram_message` | 测试改用 `_send_telegram_text` + 额外打桩 `_provider_from_settings` / `Summarizer.summarize_video` |
+| Task 5 | 计划测试假设插入序即候选序，但候选按 `video_date DESC` 排序 | 调整测试中 vid1/vid2 日期使编号 2 命中 vid2 |
+
+验证：后端全量 **243 passed**，前端 `npm run build` 通过。
+
+> 计划之外又追加了两项前端能力（Web UI 待选勾选视图、来源重要性编辑入口），见文末「追加实施」。
+
+---
+
 ## 文件结构
 
 | 文件 | 职责 | 动作 |
@@ -26,6 +55,10 @@
 | `tests/test_daily.py` | 三分流 + 候选清单测试 | 修改 |
 | `tests/test_api.py` | Web UI 端点 + Telegram 编号测试 | 修改 |
 | `tests/test_delivery.py` | 待选清单渲染与推送测试 | 修改 |
+| `web/src/App.tsx` | 「待选视频」勾选视图 + 来源「重要性」列 | 追加（Task 7/8） |
+| `web/src/types.ts` | `Source.importance`、`Video` triage 字段、`VideoMode.triage` | 追加（Task 7/8） |
+| `web/src/App.css` | 勾选行/工具栏/重要性下拉样式 | 追加（Task 7/8） |
+| `tests/test_prompts.py` | 默认提示词数量断言 `2 → 3`（Task 2 联动） | 修改 |
 
 测试统一用 `.venv/bin/python -m pytest <file>::<test> -v`。
 
@@ -1047,3 +1080,32 @@ git commit -m "feat(delivery): push numbered triage candidate list after automat
 - **Spec 覆盖**：Sources.importance（Task 1）✓；Videos.selection_status/triage_score/triage_at（Task 1）✓；三分流（Task 3）✓；便宜 LLM 初筛（Task 2）✓；Telegram 回复编号（Task 5）✓；Web UI 勾选（Task 4）✓；日报只含 auto+selected（Task 3 的 included 逻辑不变，normal/low 不再进 included）✓；未选跨天保留（`pending` 默认值 + 不去重删除）✓；低优仅记录标题和链接（Task 3 的 `low` 分支）✓。
 - **占位符扫描**：无 TBD/TODO。
 - **类型一致性**：`TriageResult(video_id, score, reason)` 在 Task 2/3 一致；`set_video_triage(video_id, score)`、`set_video_selection_status(video_id, status)`、`list_videos_by_selection_status(status, limit)`、`update_source_importance(source_id, importance)`、`upsert_source(..., importance=...)` 全文档一致。
+
+---
+
+## 追加实施（实施计划之外，按设计文档 V1.1 补做）
+
+### Task 7: Web UI 待选勾选视图 + 批量总结端点（commit `f4fa245`）
+
+**Files:** `src/ypbrief_api/app.py`、`web/src/App.tsx`、`web/src/types.ts`、`web/src/App.css`、`tests/test_api.py`
+
+- 后端：`GET /api/videos` 新增返回 `selection_status` / `triage_score`；新增 `POST /api/videos/summarize-selected`（批量标 `selected` + 逐个总结，单条失败不中断其他，返回 `summarized/failed`）
+- 前端：视频页新增第三分段视图「待选视频」（`mode='triage'`），从 `GET /api/triage/candidates` 拉取 pending 视频；每行勾选框 + ★初筛分数；工具栏：全选 / 已选计数 / 「总结选中」/「忽略选中」；详情面板在待选视图同样提供 process/summarize
+- 类型：`Video` 加 `selection_status/triage_score/duration`，`VideoMode` 增加 `triage`
+- 测试：新增 `test_api_videos_list_includes_triage_fields`、`test_api_summarize_selected_marks_selected_and_reports`（打桩 `ypbrief.summarizer.Summarizer`）
+
+### Task 8: Sources 重要性编辑入口（commit `fc6933f`）
+
+**Files:** `src/ypbrief/database.py`、`src/ypbrief_api/app.py`、`web/src/App.tsx`、`web/src/types.ts`、`web/src/App.css`、`tests/test_api.py`、`tests/test_database.py`
+
+- 后端：`db.update_source` 新增 `importance` 参数（`_UNSET` 风格）；`SourceUpdate` 模型与 `PATCH /api/sources/{id}` 支持 `importance`
+- 前端：来源表新增「重要性」列（`important/normal/low` 三档下拉，切换即保存）
+- 类型：`Source` 加 `importance`
+- 测试：新增 `test_api_update_source_importance`、`test_database_update_source_importance`
+
+### 追加实施后的验证
+
+- 后端全量测试：`243 passed`（含 6 个 Task 与追加项的全部用例）
+- 前端：`npm run build` 通过
+
+> 与追加实施相关的设计内容（§4.1 编辑入口、§7.2 已实现视图、§11.1 源码定位、§13 实施状态）已在设计文档 V1.1 同步更新。
