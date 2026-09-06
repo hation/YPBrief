@@ -269,6 +269,19 @@ class SchedulerService:
             ) if run_id else []
             finalized["failure_notice_delivered"] = any(item["status"] == "success" for item in deliveries)
             finalized["deliveries"] = deliveries
+        triage_candidates = finalized.get("triage_candidates")
+        if triage_candidates and not self._is_no_updates(finalized):
+            base = (self.settings.telegram_bot_public_base_url or "").strip().rstrip("/")
+            web_url = f"{base}/triage" if base else ""
+            finalized["triage_deliveries"] = self.delivery.send_triage_list(
+                digest_date,
+                triage_candidates,
+                language=digest_language,
+                web_url=web_url,
+                telegram_enabled=telegram_enabled,
+                feishu_enabled=feishu_enabled,
+                email_enabled=email_enabled,
+            )
         return finalized
 
     def _finalize_failed_exception(

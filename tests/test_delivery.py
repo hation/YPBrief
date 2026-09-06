@@ -359,3 +359,35 @@ def test_email_delivery_does_not_attach_markdown_when_disabled(tmp_path: Path, m
 
     assert result[0]["status"] == "success"
     assert not sent_messages[0].is_multipart()
+
+
+def test_send_triage_list_renders_numbered_candidates(tmp_path: Path) -> None:
+    db = Database(tmp_path / "ypbrief.db")
+    db.initialize()
+    settings = Settings()
+    delivery = DeliveryService(db, settings)
+    from ypbrief.delivery import _render_triage_list
+
+    videos = [
+        {
+            "video_id": "vid1",
+            "video_title": "Episode 1",
+            "channel_name": "Channel A",
+            "video_date": "2026-04-24",
+            "duration": 3600,
+            "triage_score": 5.0,
+        },
+        {
+            "video_id": "vid2",
+            "video_title": "Episode 2",
+            "channel_name": "Channel B",
+            "video_date": "2026-04-25",
+            "duration": 600,
+            "triage_score": None,
+        },
+    ]
+    text = _render_triage_list("2026-04-25", videos, web_url="http://localhost/triage")
+    assert "待选视频" in text
+    assert "1. Channel A | Episode 1" in text
+    assert "★5" in text
+    assert "http://localhost/triage" in text

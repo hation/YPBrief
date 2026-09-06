@@ -186,6 +186,34 @@ class DeliveryService:
             email_enabled=email_enabled,
         )
 
+    def send_triage_list(
+        self,
+        run_date: str,
+        videos: list[dict[str, Any]],
+        *,
+        language: str = "zh",
+        web_url: str = "",
+        telegram_enabled: bool | None = None,
+        feishu_enabled: bool | None = None,
+        email_enabled: bool | None = None,
+    ) -> list[dict[str, Any]]:
+        if not videos or not self.any_enabled(
+            telegram_enabled=telegram_enabled,
+            feishu_enabled=feishu_enabled,
+            email_enabled=email_enabled,
+        ):
+            return []
+        text = _render_triage_list(run_date, videos, language=language, web_url=web_url)
+        return self.send_text(
+            text,
+            run_date=run_date,
+            summary_id=None,
+            run_id=None,
+            telegram_enabled=telegram_enabled,
+            feishu_enabled=feishu_enabled,
+            email_enabled=email_enabled,
+        )
+
     def send_failure_notice(
         self,
         run_id: int,
@@ -572,6 +600,27 @@ class DeliveryService:
         self.settings.email_to = ",".join(json.loads(values["email_to_json"] or "[]"))
         self.settings.email_subject_template = values["email_subject_template"]
         self.settings.email_attach_markdown = "true" if values["email_attach_markdown"] else "false"
+
+
+def _render_triage_list(run_date: str, videos: list[dict[str, Any]], *, language: str = "zh", web_url: str = "") -> str:
+    lines = [f"# 待选视频清单 - {run_date}", ""]
+    if language == "en":
+        lines.append(f"{len(videos)} videos await selection. Reply with numbers (e.g. 1 3 5) on Telegram to summarize.")
+    else:
+        lines.append(f"共 {len(videos)} 条待选视频。Telegram 回复编号（如 1 3 5）即可选中并生成总结。")
+    if web_url:
+        lines.extend(["", f"Web UI 待选页：{web_url}"])
+    lines.append("")
+    for index, video in enumerate(videos, start=1):
+        duration = video.get("duration")
+        duration_text = f"{int(duration)}s" if duration else "-"
+        score = video.get("triage_score")
+        score_text = f" ★{score:g}" if score else ""
+        title = video.get("video_title") or video.get("video_id") or "-"
+        lines.append(
+            f"{index}. {video.get('channel_name') or '-'} | {title} | {video.get('video_date') or '-'} | {duration_text}{score_text}"
+        )
+    return "\n".join(lines)
 
 
 def _valid_telegram_chat_id(chat_id: str) -> bool:
