@@ -527,6 +527,7 @@ def test_digest_run_service_refreshes_missing_uploads_playlist_for_channel_sourc
         url="https://www.youtube.com/channel/UC123",
         channel_id="UC123",
         channel_name="Test Channel",
+        importance="important",
     )
     youtube = FakeChannelYouTube()
 
@@ -569,6 +570,7 @@ def test_digest_run_service_discovers_sources_processes_missing_and_records_run(
         channel_id="UC123",
         channel_name="Test Channel",
         playlist_id="PL123",
+        importance="important",
     )
     processor = FakeProcessor(db)
 
@@ -647,6 +649,7 @@ def test_digest_run_service_filters_private_video_and_continues_with_public_vide
         channel_id="UC123",
         channel_name="Test Channel",
         playlist_id="PL123",
+        importance="important",
     )
     processor = FakeProcessor(db)
 
@@ -690,6 +693,7 @@ def test_digest_run_service_selects_newest_usable_videos_after_filtering_private
         channel_id="UC123",
         channel_name="Test Channel",
         playlist_id="PL123",
+        importance="important",
     )
     processor = FakeProcessor(db)
 
@@ -733,6 +737,7 @@ def test_digest_run_service_filters_videos_under_five_minutes(tmp_path: Path) ->
         channel_id="UC123",
         channel_name="Test Channel",
         playlist_id="PL123",
+        importance="important",
     )
     processor = FakeProcessor(db)
 
@@ -776,6 +781,7 @@ def test_digest_run_service_allows_unlimited_videos_per_source(tmp_path: Path) -
         channel_id="UC123",
         channel_name="Test Channel",
         playlist_id="PL123",
+        importance="important",
     )
     youtube = FakeYouTubeManyVideos()
     processor = FakeProcessor(db)
@@ -816,6 +822,7 @@ def test_digest_run_service_allows_all_history_window(tmp_path: Path) -> None:
         channel_id="UC123",
         channel_name="Test Channel",
         playlist_id="PL123",
+        importance="important",
     )
 
     class FakeYouTubeArchive:
@@ -893,6 +900,7 @@ def test_digest_run_service_can_force_resummarizing_existing_summaries(tmp_path:
         channel_id="UC123",
         channel_name="Test Channel",
         playlist_id="PL123",
+        importance="important",
     )
     db.upsert_video("vid1", "UC123", "Episode 1", "https://youtu.be/vid1", video_date="2026-04-24")
     db.save_summary(
@@ -1111,6 +1119,7 @@ def test_scheduler_emits_key_runtime_logs_for_automatic_job(tmp_path: Path, capl
         youtube_id="PLLOG",
         url="https://www.youtube.com/playlist?list=PL123",
         enabled=True,
+        importance="important",
     )
     runner = DigestRunService(
         db=db,
@@ -1148,6 +1157,7 @@ def test_digest_run_emits_runtime_logs_for_manual_run(tmp_path: Path, caplog) ->
         youtube_id="PLMANUAL",
         url="https://www.youtube.com/playlist?list=PL123",
         enabled=True,
+        importance="important",
     )
     runner = DigestRunService(
         db=db,
@@ -1236,3 +1246,118 @@ def test_scheduler_allows_automatic_run_after_job_was_updated(tmp_path: Path) ->
     assert len(runs) == 2
     assert runs[-1]["run_type"] == "scheduled"
     assert runs[-1]["scheduled_job_id"] == job["job_id"]
+
+
+class FakeTriageService:
+    def __init__(self) -> None:
+        self.called_with: list[list[str]] = []
+
+    def triage(self, videos):
+        self.called_with.append([v["video_id"] for v in videos])
+        from ypbrief.triage import TriageResult
+
+        return [
+            TriageResult(video_id=v["video_id"], score=3.0, reason="ok")
+            for v in videos
+        ]
+
+
+def test_digest_run_tiers_by_importance_and_keeps_candidates(tmp_path: Path) -> None:
+    db = Database(tmp_path / "ypbrief.db")
+    db.initialize()
+    prompt_file = tmp_path / "prompts.yaml"
+    PromptFileService(prompt_file).save(
+        "daily_digest",
+        system_prompt="正式日报提示词",
+        user_template="日报 {{ run_date }}\n\n{{ summaries }}",
+    )
+    db.upsert_channel("UC123", "Test Channel", "https://youtube.com/channel/UC123")
+    important_id = db.upsert_source(
+        source_type="channel",
+        source_name="Important",
+        youtube_id="UCIMP",
+        url="https://www.youtube.com/channel/UCIMP",
+        channel_id="UC123",
+        channel_name="Test Channel",
+        importance="important",
+    )
+    normal_id = db.upsert_source(
+        source_type="channel",
+        source_name="Normal",
+        youtube_id="UCNOR",
+        url="https://www.youtube.com/channel/UCNOR",
+        channel_id="UC123",
+        channel_name="Test Channel",
+        importance="normal",
+    )
+    low_id = db.upsert_source(
+        source_type="channel",
+        source_name="Low",
+        youtube_id="UCLOW",
+        url="https://www.youtube.com/channel/UCLOW",
+        channel_id="UC123",
+        channel_name="Test Channel",
+        importance="low",
+    )
+
+    class TierYouTube:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def resolve_channel(self, channel_input: str):
+            return ChannelInfo(
+                channel_id="UC123",
+                channel_name="Test Channel",
+                channel_url="https://youtube.com/channel/UC123",
+                handle=None,
+                uploads_playlist_id="UU123",
+            )
+
+        def iter_uploads(self, uploads_playlist_id: str, limit: int | None = None):
+            self.calls += 1
+            return [
+                type("Video", (), {
+                    "video_id": f"v{self.calls}",
+                    "title": f"Episode {self.calls}",
+                    "url": f"https://youtu.be/v{self.calls}",
+                    "published_at": "2026-04-24T10:00:00Z",
+                    "channel_id": "UC123",
+                    "channel_name": "Test Channel",
+                    "duration_seconds": 600,
+                })(),
+            ]
+
+    youtube = TierYouTube()
+    processor = FakeProcessor(db)
+    triage = FakeTriageService()
+    runner = DigestRunService(
+        db=db,
+        youtube=youtube,
+        processor=processor,
+        digest_service=DailyDigestService(db, LenientFakeProvider(), tmp_path / "exports", settings=Settings(prompt_file=prompt_file)),
+        triage_service=triage,
+    )
+    result = runner.run(
+        source_ids=[important_id, normal_id, low_id],
+        run_date="2026-04-25",
+        window_days=3,
+        max_videos_per_source=10,
+    )
+
+    # 重要频道：自动总结，selection_status=auto
+    assert processor.processed == ["v1"]
+    assert db.get_video("v1")["selection_status"] == "auto"
+    # 普通频道：不总结，进初筛，selection_status=pending 且有分数
+    assert "v2" not in processor.processed
+    assert triage.called_with == [["v2"]]
+    assert db.get_video("v2")["selection_status"] == "pending"
+    assert db.get_video("v2")["triage_score"] == 3.0
+    # 低优频道：仅记录标题和链接，不总结不初筛
+    assert "v3" not in processor.processed
+    assert triage.called_with == [["v2"]]
+    assert db.get_video("v3")["selection_status"] == "pending"
+    assert db.get_video("v3")["triage_score"] is None
+    # 候选清单只含 normal
+    assert [c["video_id"] for c in result["triage_candidates"]] == ["v2"]
+    # 日报只含重要频道（auto）
+    assert result["status"] == "completed"

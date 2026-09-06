@@ -12,6 +12,7 @@ from .config import Settings
 from .database import Database
 from .prompts import DEFAULT_PROMPTS, DatabasePromptService
 from .text_normalization import clean_summary_markdown
+from .triage import TriageService
 from .video_processor import MIN_SUMMARY_VIDEO_SECONDS
 
 
@@ -178,11 +179,18 @@ class DigestRunService:
         youtube: VideoDiscoverySource,
         processor: VideoProcessorLike,
         digest_service: DailyDigestService,
+        triage_service: TriageService | None = None,
     ) -> None:
         self.db = db
         self.youtube = youtube
         self.processor = processor
         self.digest_service = digest_service
+        self.triage_service = triage_service
+
+    def _get_triage_service(self) -> TriageService:
+        if self.triage_service is None:
+            self.triage_service = TriageService(db=self.db, provider=self.processor.summarizer.provider)
+        return self.triage_service
 
     def run(
         self,
@@ -215,6 +223,7 @@ class DigestRunService:
         source_ids_by_video: dict[str, int] = {}
         failed: list[tuple[str, int, str]] = []
         skipped: list[tuple[str, int, str]] = []
+        triage_candidates: list[dict] = []
 
         try:
             for source in [self.db.get_source(source_id) for source_id in source_ids]:
@@ -245,6 +254,16 @@ class DigestRunService:
                         continue
 
                     summary_id = self._latest_summary_id(video_id) if reuse_existing_summaries else None
+                    importance = source.get("importance") or "normal"
+                    if summary_id is None and importance != "important":
+                        self.db.set_video_selection_status(video_id, "pending")
+                        if importance == "low":
+                            skipped.append((video_id, source["source_id"], "low priority (title+link only)"))
+                            self._record_run_video(run_id, video_id, source["source_id"], "skipped", "triage", "low priority (title+link only)", None)
+                        else:
+                            triage_candidates.append(self.db.get_video(video_id))
+                            self._record_run_video(run_id, video_id, source["source_id"], "skipped", "triage", "pending selection", None)
+                        continue
                     try:
                         if summary_id is None:
                             if not process_missing_videos:
@@ -256,11 +275,16 @@ class DigestRunService:
                         if summary_id is None:
                             raise ValueError("summary was not created")
                         included.append(video_id)
+                        self.db.set_video_selection_status(video_id, "auto")
                         source_ids_by_video.setdefault(video_id, int(source["source_id"]))
                         self._record_run_video(run_id, video_id, source["source_id"], "included", "include", None, summary_id)
                     except Exception as exc:
                         failed.append((video_id, source["source_id"], str(exc)))
                         self._record_run_video(run_id, video_id, source["source_id"], "failed", "process", str(exc), None)
+
+            if triage_candidates:
+                for triage in self._get_triage_service().triage(triage_candidates):
+                    self.db.set_video_triage(triage.video_id, triage.score)
 
             unique_included = list(dict.fromkeys(included))
             summary_id = None
@@ -285,7 +309,9 @@ class DigestRunService:
                 error_message = None
             self._complete_run(run_id, status, summary_id, len(unique_included), len(failed), len(skipped), error_message)
             _log_digest_run_finished(run_id, status, len(unique_included), len(failed), len(skipped), started_at)
-            return self.get_run(run_id)
+            result = self.get_run(run_id)
+            result["triage_candidates"] = [self.db.get_video(v["video_id"]) for v in triage_candidates]
+            return result
         except Exception as exc:
             self._complete_run(run_id, "failed", None, len(set(included)), len(failed), len(skipped), str(exc))
             _log_digest_run_finished(run_id, "failed", len(set(included)), len(failed), len(skipped), started_at)
