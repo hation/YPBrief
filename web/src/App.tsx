@@ -99,6 +99,14 @@ const copy = {
     showLessVideos: '收起',
     readingView: '阅读视图',
     maintenanceView: '维护视图',
+    triageView: '待选视频',
+    triageHint: '待选视频仅记录标题和链接，勾选后点「总结选中」才会消耗 token。',
+    selectAll: '全选',
+    summarizeSelected: '总结选中',
+    dismissSelected: '忽略选中',
+    selectedCount: '已选',
+    summarizeSelectedDone: '总结完成',
+    noPendingVideos: '暂无待选视频',
     needsAttention: '需要处理',
     noSummaries: '还没有已总结视频',
     quickVideoSummary: '临时视频总结',
@@ -346,6 +354,14 @@ const copy = {
     showLessVideos: 'Show less',
     readingView: 'Reading View',
     maintenanceView: 'Maintenance View',
+    triageView: 'Triage',
+    triageHint: 'Candidate videos store title and link only; summarize them after selecting.',
+    selectAll: 'Select all',
+    summarizeSelected: 'Summarize selected',
+    dismissSelected: 'Dismiss selected',
+    selectedCount: 'Selected',
+    summarizeSelectedDone: 'Summaries created',
+    noPendingVideos: 'No videos awaiting selection',
     needsAttention: 'Needs Attention',
     noSummaries: 'No summarized videos yet',
     quickVideoSummary: 'Quick Video Summary',
@@ -1569,18 +1585,29 @@ function VideoListRow({
   mode,
   t,
   onSelect,
+  checked,
+  onToggleCheck,
 }: {
   video: Video
   selected: boolean
   mode: VideoMode
   t: typeof copy.zh
   onSelect: () => void
+  checked?: boolean
+  onToggleCheck?: (videoId: string) => void
 }) {
-  return (
+  const row = (
     <button className={selected ? 'list-row selected' : 'list-row'} onClick={onSelect}>
       <strong>{video.video_title}</strong>
-      <span>{video.channel_name} · {video.video_date || '-'}{mode === 'maintenance' ? ` · ${statusLabel(video.status, t)} (${video.status})` : ''}</span>
+      <span>{video.channel_name} · {video.video_date || '-'}{mode === 'maintenance' ? ` · ${statusLabel(video.status, t)} (${video.status})` : ''}{mode === 'triage' && video.triage_score ? ` · ★${video.triage_score}` : ''}</span>
     </button>
+  )
+  if (!onToggleCheck) return row
+  return (
+    <div className="list-row-wrap">
+      <input type="checkbox" className="triage-check" checked={!!checked} onChange={() => onToggleCheck(video.video_id)} aria-label={video.video_title} />
+      {row}
+    </div>
   )
 }
 
@@ -1623,6 +1650,8 @@ function VideosView({
   const [status, setStatus] = useState('')
   const [mode, setMode] = useState<VideoMode>('reading')
   const [listView, setListView] = useState<'list' | 'channel'>('list')
+  const [triageVideos, setTriageVideos] = useState<Video[]>([])
+  const [checked, setChecked] = useState<Set<string>>(new Set())
   const [expandedChannels, setExpandedChannels] = useState<string[]>([])
   const [deliveryChannels, setDeliveryChannels] = useState<DeliveryChannels>({ telegram: true, feishu: false, email: false })
   const [delivering, setDelivering] = useState(false)
@@ -1638,7 +1667,7 @@ function VideosView({
   })
 
   const readableVideos = videos.filter((video) => video.status === 'summarized' && video.summary_latest_id)
-  const listSource = mode === 'reading' ? readableVideos : videos
+  const listSource = mode === 'reading' ? readableVideos : mode === 'triage' ? triageVideos : videos
 
   useEffect(() => {
     if (!selectedVideoId || selectedVideoId === appliedSelectedVideoId) return
@@ -1678,6 +1707,7 @@ function VideosView({
   const switchMode = (nextMode: VideoMode) => {
     setMode(nextMode)
     setTab('summary')
+    setChecked(new Set())
     if (nextMode === 'reading') {
       setFilters({ source: '', status: 'summarized', summary: 'yes', transcript: '', dateFrom: '', dateTo: '', keyword: '' })
     } else {
@@ -1709,6 +1739,69 @@ function VideosView({
         ? current.filter((item) => item !== channelKey)
         : [...current, channelKey]
     ))
+  }
+
+  const loadCandidates = async () => {
+    try {
+      setTriageVideos(await api<Video[]>('/triage/candidates'))
+    } catch {
+      setTriageVideos([])
+    }
+  }
+
+  useEffect(() => {
+    if (mode !== 'triage') return
+    loadCandidates()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, refreshTick])
+
+  const toggleChecked = (videoId: string) => {
+    setChecked((current) => {
+      const next = new Set(current)
+      if (next.has(videoId)) next.delete(videoId)
+      else next.add(videoId)
+      return next
+    })
+  }
+
+  const allChecked = filtered.length > 0 && filtered.every((video) => checked.has(video.video_id))
+
+  const toggleAllChecked = () => {
+    setChecked(allChecked ? new Set() : new Set(filtered.map((video) => video.video_id)))
+  }
+
+  const summarizeChecked = async () => {
+    if (!checked.size) return
+    setStatus(t.operationRunning)
+    try {
+      const result = await api<{ summarized: number; failed: number }>('/videos/summarize-selected', {
+        method: 'POST',
+        body: JSON.stringify({ video_ids: [...checked] }),
+      })
+      setChecked(new Set())
+      setStatus(`${t.summarizeSelectedDone}: ${result.summarized}${result.failed ? ` · ${t.failed}: ${result.failed}` : ''}`)
+      await onChanged()
+      await loadCandidates()
+    } catch (exc) {
+      setStatus(errorMessage(exc))
+    }
+  }
+
+  const dismissChecked = async () => {
+    if (!checked.size) return
+    setStatus(t.operationRunning)
+    try {
+      await api('/videos/select', {
+        method: 'POST',
+        body: JSON.stringify({ video_ids: [...checked], action: 'dismissed' }),
+      })
+      setChecked(new Set())
+      setStatus(t.operationComplete)
+      await onChanged()
+      await loadCandidates()
+    } catch (exc) {
+      setStatus(errorMessage(exc))
+    }
   }
 
   const operate = async (path: string) => {
@@ -1818,15 +1911,26 @@ function VideosView({
           <option value="no">{t.noTranscript}</option>
         </select>
         <input value={filters.keyword} onChange={(event) => setFilters({ ...filters, keyword: event.target.value })} placeholder={t.keyword} />
-        {mode === 'maintenance' ? <div className="status-help">{t.statusHelp}</div> : <div className="status-help">{t.showMaintenanceHint}</div>}
+        {mode === 'maintenance' ? <div className="status-help">{t.statusHelp}</div> : mode === 'triage' ? <div className="status-help">{t.triageHint}</div> : <div className="status-help">{t.showMaintenanceHint}</div>}
         <h2 className="section-gap">{t.videoLibrary}</h2>
         <div className="segmented compact-segmented">
           <button className={listView === 'list' ? 'active' : ''} onClick={() => setListView('list')}>{t.listView}</button>
           <button className={listView === 'channel' ? 'active' : ''} onClick={() => setListView('channel')}>{t.channelView}</button>
         </div>
+        {mode === 'triage' ? (
+          <div className="triage-toolbar">
+            <label className="triage-checkbox-label">
+              <input type="checkbox" checked={allChecked} onChange={toggleAllChecked} />
+              {t.selectAll}
+            </label>
+            <span className="triage-count">{t.selectedCount}: {checked.size}</span>
+            <button disabled={!checked.size} onClick={summarizeChecked}>{t.summarizeSelected}</button>
+            <button className="ghost" disabled={!checked.size} onClick={dismissChecked}>{t.dismissSelected}</button>
+          </div>
+        ) : null}
         {filtered.length ? (
           listView === 'list' ? filtered.map((video) => (
-            <VideoListRow key={video.video_id} video={video} selected={selectedId === video.video_id} mode={mode} t={t} onSelect={() => { setSelectedId(video.video_id); setTab('summary') }} />
+            <VideoListRow key={video.video_id} video={video} selected={selectedId === video.video_id} mode={mode} t={t} checked={mode === 'triage' ? checked.has(video.video_id) : false} onToggleCheck={mode === 'triage' ? toggleChecked : undefined} onSelect={() => { setSelectedId(video.video_id); setTab('summary') }} />
           )) : (
             <div className="channel-list">
               {channelGroups.map((group) => {
@@ -1846,14 +1950,14 @@ function VideosView({
                       ) : null}
                     </div>
                     {visible.map((video) => (
-                      <VideoListRow key={video.video_id} video={video} selected={selectedId === video.video_id} mode={mode} t={t} onSelect={() => { setSelectedId(video.video_id); setTab('summary') }} />
+                      <VideoListRow key={video.video_id} video={video} selected={selectedId === video.video_id} mode={mode} t={t} checked={mode === 'triage' ? checked.has(video.video_id) : false} onToggleCheck={mode === 'triage' ? toggleChecked : undefined} onSelect={() => { setSelectedId(video.video_id); setTab('summary') }} />
                     ))}
                   </div>
                 )
               })}
             </div>
           )
-        ) : <p>{mode === 'reading' ? t.noSummaries : t.noOperationalItems}</p>}
+        ) : <p>{mode === 'reading' ? t.noSummaries : mode === 'triage' ? t.noPendingVideos : t.noOperationalItems}</p>}
       </div>
       <article className="panel detail-panel">
         {!detail ? <p>Loading</p> : (

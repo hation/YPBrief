@@ -2,7 +2,7 @@ export type Language = 'zh' | 'en'
 export type Page = 'dashboard' | 'sources' | 'videos' | 'digests' | 'prompts' | 'automation' | 'settings'
 export type VideoTab = 'summary' | 'transcript' | 'vtt' | 'metadata'
 export type DigestTab = 'summary' | 'included' | 'failed' | 'metadata'
-export type VideoMode = 'reading' | 'maintenance'
+export type VideoMode = 'reading' | 'maintenance' | 'triage'
 
 export type Dashboard = {
   stats: Record<string, number>
@@ -83,6 +83,9 @@ export type Video = {
   video_date?: string | null
   channel_name: string
   status: string
+  selection_status?: string | null
+  triage_score?: number | null
+  duration?: number | null
   summary_latest_id?: number | null
   has_transcript?: boolean
   fetched_at?: string | null

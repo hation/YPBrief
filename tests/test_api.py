@@ -3117,3 +3117,59 @@ def test_telegram_webhook_selects_by_numbers(tmp_path: Path, monkeypatch) -> Non
         headers={"X-Telegram-Bot-Api-Secret-Token": ""},
     )
     assert any("编号无效" in r for r in replies)
+
+
+def test_api_videos_list_includes_triage_fields(tmp_path: Path) -> None:
+    db = Database(tmp_path / "ypbrief.db")
+    db.initialize()
+    db.upsert_channel("UC123", "Test Channel", "https://youtube.com/channel/UC123")
+    db.upsert_video("vid1", "UC123", "Episode 1", "https://youtu.be/vid1", video_date="2026-04-24")
+    db.set_video_selection_status("vid1", "pending")
+    client = TestClient(create_app(db=db))
+
+    videos = client.get("/api/videos")
+    assert videos.status_code == 200
+    assert videos.json(), "expected at least one video"
+    row = videos.json()[0]
+    assert "selection_status" in row
+    assert "triage_score" in row
+    assert row["selection_status"] == "pending"
+
+
+def test_api_summarize_selected_marks_selected_and_reports(tmp_path: Path, monkeypatch) -> None:
+    db = Database(tmp_path / "ypbrief.db")
+    db.initialize()
+    db.upsert_channel("UC123", "Test Channel", "https://youtube.com/channel/UC123")
+    db.upsert_video("vid1", "UC123", "Episode 1", "https://youtu.be/vid1", video_date="2026-04-24")
+    db.upsert_video("vid2", "UC123", "Episode 2", "https://youtu.be/vid2", video_date="2026-04-25")
+    db.set_video_selection_status("vid1", "pending")
+    db.set_video_selection_status("vid2", "pending")
+
+    class FakeProvider:
+        name = "fake"
+        model = "fake-model"
+
+        def summarize(self, prompt: str, transcript: str) -> str:
+            return "summary"
+
+    monkeypatch.setattr(app_module, "_provider_from_settings", lambda db, settings: FakeProvider())
+
+    from ypbrief.summarizer import Summarizer
+
+    monkeypatch.setattr(Summarizer, "summarize_video", lambda self, video_id: 100 if video_id == "vid1" else 200)
+
+    client = TestClient(create_app(db=db))
+    resp = client.post("/api/videos/summarize-selected", json={"video_ids": ["vid1", "vid2"]})
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["summarized"] == 2
+    assert data["failed"] == 0
+    assert db.get_video("vid1")["selection_status"] == "selected"
+    assert db.get_video("vid2")["selection_status"] == "selected"
+
+    # 不存在的视频计入失败，不中断其他视频
+    resp2 = client.post("/api/videos/summarize-selected", json={"video_ids": ["nope"]})
+    assert resp2.status_code == 200
+    assert resp2.json()["failed"] == 1
+    assert resp2.json()["failures"][0]["error"] == "video not found"

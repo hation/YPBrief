@@ -1054,6 +1054,7 @@ def create_app(
             rows = conn.execute(
                 """
                 SELECT v.video_id, v.video_title, v.video_url, v.video_date, v.status,
+                       v.selection_status, v.triage_score,
                        v.error_message, v.summary_latest_id, v.fetched_at, v.cleaned_at,
                        v.summarized_at,
                        CASE WHEN v.transcript_clean IS NOT NULL AND v.transcript_clean != '' THEN 1 ELSE 0 END AS has_transcript,
@@ -1088,6 +1089,29 @@ def create_app(
                 raise HTTPException(status_code=404, detail=f"Video not found: {video_id}")
             db.set_video_selection_status(video_id, action)
         return {"updated": len(video_ids), "action": action}
+
+    @app.post("/api/videos/summarize-selected")
+    def summarize_selected_videos(payload: dict[str, Any]) -> dict[str, Any]:
+        video_ids = [str(v) for v in (payload.get("video_ids") or [])]
+        if not video_ids:
+            raise HTTPException(status_code=400, detail="video_ids is required")
+        summaries: list[dict[str, Any]] = []
+        failures: list[dict[str, Any]] = []
+        for video_id in video_ids:
+            try:
+                db.get_video(video_id)
+            except KeyError:
+                failures.append({"video_id": video_id, "error": "video not found"})
+                continue
+            db.set_video_selection_status(video_id, "selected")
+            try:
+                from ypbrief.summarizer import Summarizer
+
+                summary_id = Summarizer(db, _provider_from_settings(db, settings), settings=settings).summarize_video(video_id)
+                summaries.append({"video_id": video_id, "summary_id": summary_id})
+            except Exception as exc:
+                failures.append({"video_id": video_id, "error": str(exc)})
+        return {"summarized": len(summaries), "failed": len(failures), "summaries": summaries, "failures": failures}
 
     @app.post("/api/videos/process-url")
     def process_video_url(payload: VideoProcessUrl) -> dict[str, Any]:
