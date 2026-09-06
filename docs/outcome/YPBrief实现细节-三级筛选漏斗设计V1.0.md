@@ -2,6 +2,7 @@
 
 | 文档版本 | 创建日期 | 修订简述 |
 | --- | --- | --- |
+| V1.1 | 2026-09-06 | 依据实际实现更新：三分流、TriageService、Telegram 回复编号、Web UI 待选勾选视图、待选清单推送、Sources 重要性编辑入口均已落地 |
 | V1.0 | 2026-09-06 | 首次创建。设计"发现→初筛→人工挑选→总结"三级漏斗，解决关注频道多、全量 LLM 总结 token 消耗过高的问题 |
 
 ## 目录
@@ -81,7 +82,9 @@
 
 - `important`：新视频自动全字幕总结（现状行为）
 - `normal`：只发现 + 初筛 → 待选清单
-- `low`：只发现入库，不推送不初筛
+- `low`：仅记录标题和链接，不执行总结
+
+> 已实现编辑入口：Web UI 来源表新增「重要性」列（`important/normal/low` 三档下拉，切换即保存，走 `PATCH /api/sources/{id}`，对应 `db.update_source(..., importance=...)`）。未设置时默认 `normal`。
 
 ### 4.2 Videos 增加筛选状态字段
 
@@ -120,7 +123,7 @@
      elif importance == 'normal':
          收集待初筛批次
      else:  # low
-         仅标记 selection_status='pending'，triage_score=NULL
+         仅记录标题和链接，selection_status='pending'，不执行总结
 3. 初筛阶段（仅 normal 批次，新增）：
    批量调用 video_triage 提示词 → 写回 triage_score / selection_status='pending'
 4. 待选清单生成（新增）：
@@ -160,12 +163,18 @@
 - 回复确认："已选中 N 条，正在总结..."
 - 无编号且无链接的消息仍回复原引导文案
 
-### 7.2 Web UI 勾选
+### 7.2 Web UI 勾选（已实现）
 
-- 视频列表（[app.py:L1051](file:///Users/xingan/Documents/software/aiengine/ypbrief/src/ypbrief_api/app.py#L1051)）增加筛选：`selection_status=pending`
-- 每条加"选择/忽略"按钮，支持多选
-- 新增批量端点：`POST /api/videos/select`（body: `video_ids[]`, `action: selected|dismissed`）
-- 新增"总结选中"端点：复用现有单视频逻辑批量执行
+视频页新增第三分段视图「待选视频」（`mode='triage'`），与「阅读/维护」并列：
+
+- 数据源：`GET /api/triage/candidates` 拉取 `selection_status='pending'` 的视频（不受主列表 200 条上限影响）
+- 列表行：勾选框 + 标题/频道/日期 + ★初筛分数（`triage_score`）
+- 工具栏：全选、已选计数、「总结选中」、「忽略选中」
+- 端点：
+  - `POST /api/videos/select`（body: `video_ids[]`, `action: selected|dismissed`）
+  - `POST /api/videos/summarize-selected`（批量标 `selected` + 逐个总结，单条失败不中断其他，返回 `summarized/failed` 计数）
+- 详情面板在待选视图同样提供「完整处理/重新总结」按钮
+- `GET /api/videos` 列表已返回 `selection_status` / `triage_score` 字段
 
 ### 7.3 其他渠道
 
@@ -215,12 +224,16 @@
 
 | 文件 | 改动 |
 | --- | --- |
-| [database.py](file:///Users/xingan/Documents/software/aiengine/ypbrief/src/ypbrief/database.py) | 建表加列、幂等迁移、upsert/查询新字段 |
-| [daily.py](file:///Users/xingan/Documents/software/aiengine/ypbrief/src/ypbrief/daily.py) | run 内三分流 + 清单生成 + included 过滤 |
+| [database.py](file:///Users/xingan/Documents/software/aiengine/ypbrief/src/ypbrief/database.py) | 建表加列、幂等迁移、`upsert_source`/`update_source` 支持 importance、视频筛选状态访问方法 |
+| [daily.py](file:///Users/xingan/Documents/software/aiengine/ypbrief/src/ypbrief/daily.py) | `DigestRunService` 三分流 + 初筛触发 + 候选清单返回 + `triage_service` 注入 |
 | [prompts.py](file:///Users/xingan/Documents/software/aiengine/ypbrief/src/ypbrief/prompts.py) | 新增 `video_triage` 默认提示词 |
-| [summarizer.py](file:///Users/xingan/Documents/software/aiengine/ypbrief/src/ypbrief/summarizer.py) | （可选）抽出 triage 调用方法 |
-| [app.py](file:///Users/xingan/Documents/software/aiengine/ypbrief/src/ypbrief_api/app.py) | Telegram 编号选择、批量 select/总结端点、待选查询 |
-| [delivery.py](file:///Users/xingan/Documents/software/aiengine/ypbrief/src/ypbrief/delivery.py) | 待选清单格式化与推送 |
+| [triage.py](file:///Users/xingan/Documents/software/aiengine/ypbrief/src/ypbrief/triage.py) | `TriageService`：标题级批量初筛 + JSON 解析（新建） |
+| [scheduler.py](file:///Users/xingan/Documents/software/aiengine/ypbrief/src/ypbrief/scheduler.py) | 自动任务结束后推送待选清单（`send_triage_list`） |
+| [app.py](file:///Users/xingan/Documents/software/aiengine/ypbrief/src/ypbrief_api/app.py) | Telegram 编号选择、`GET /api/triage/candidates`、`POST /api/videos/select`、`POST /api/videos/summarize-selected`、`PATCH /api/sources/{id}` 支持 importance |
+| [delivery.py](file:///Users/xingan/Documents/software/aiengine/ypbrief/src/ypbrief/delivery.py) | `send_triage_list` 待选清单渲染与推送 |
+| [web/src/App.tsx](file:///Users/xingan/Documents/software/aiengine/ypbrief/web/src/App.tsx) | 「待选视频」勾选视图 + 来源「重要性」列 |
+| [web/src/types.ts](file:///Users/xingan/Documents/software/aiengine/ypbrief/web/src/types.ts) | `Source.importance`、`Video.selection_status/triage_score/duration`、`VideoMode` 增加 `triage` |
+| [web/src/App.css](file:///Users/xingan/Documents/software/aiengine/ypbrief/web/src/App.css) | 勾选行/工具栏/重要性下拉样式 |
 
 ### 11.2 结构选择
 
@@ -234,3 +247,26 @@
 | 两级（重要/普通） | 改动最小 | 普通频道全进待选，清单冗长，无推荐 | 不采纳 |
 | 不分级全人工 | 最省 token | 清单极长、挑选负担重，违背"自动发现"初衷 | 不采纳 |
 | 全自动按规则（时长/关键词） | 零额外 token | 机械、误判多，仍需人工确认 | 作为初筛辅助可选 |
+
+## 13 实施状态
+
+V1.0 设计已按实施计划全部落地并合入 main，共 8 个提交：
+
+| 提交 | 内容 |
+| --- | --- |
+| `0d45a56` | db：triage 列 + importance 分级 + 幂等迁移 |
+| `8128c35` | triage：`video_triage` 提示词 + `TriageService` |
+| `850887a` | daily：`DigestRunService` 三分流 + 候选清单 |
+| `9700751` | api：待选查询 + `POST /api/videos/select` |
+| `f96d517` | api：Telegram 回复编号选择 |
+| `1301811` | delivery：自动任务后推送待选清单 |
+| `f4fa245` | web：待选勾选视图 + `POST /api/videos/summarize-selected` |
+| `fc6933f` | web：来源「重要性」编辑入口 |
+
+验证：后端全量测试 **243 passed**（新增约 15 个用例），前端 `npm run build` 通过。
+
+### 已知边界
+
+- 既有来源默认 `normal`，升级后不再自动总结，需在来源页把重点频道改为「重要·自动总结」
+- 待选视图展示跨天累积的 `pending` 视频；Web UI 无去重（依赖 run 内按发现时间去重推送）
+- Telegram 编号选择需 `TELEGRAM_BOT_INBOX_ENABLED=true` + 公网 HTTPS 才能用
