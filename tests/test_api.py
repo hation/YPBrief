@@ -3173,3 +3173,28 @@ def test_api_summarize_selected_marks_selected_and_reports(tmp_path: Path, monke
     assert resp2.status_code == 200
     assert resp2.json()["failed"] == 1
     assert resp2.json()["failures"][0]["error"] == "video not found"
+
+
+def test_api_update_source_importance(tmp_path: Path) -> None:
+    db = Database(tmp_path / "ypbrief.db")
+    db.initialize()
+    source_id = db.upsert_source(
+        source_type="channel",
+        source_name="Test Channel",
+        youtube_id="UCABC",
+        url="https://www.youtube.com/channel/UCABC",
+        importance="normal",
+    )
+    client = TestClient(create_app(db=db))
+
+    resp = client.patch(f"/api/sources/{source_id}", json={"importance": "important"})
+    assert resp.status_code == 200
+    assert resp.json()["importance"] == "important"
+    assert db.get_source(source_id)["importance"] == "important"
+
+    resp2 = client.patch(f"/api/sources/{source_id}", json={"importance": "low"})
+    assert resp2.status_code == 200
+    assert db.get_source(source_id)["importance"] == "low"
+
+    missing = client.patch("/api/sources/99999", json={"importance": "low"})
+    assert missing.status_code == 404

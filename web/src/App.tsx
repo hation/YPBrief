@@ -42,6 +42,10 @@ const copy = {
     groups: '分组',
     group: '分组',
     ungrouped: '未分组',
+    importance: '重要性',
+    importanceImportant: '重要·自动总结',
+    importanceNormal: '普通·待选',
+    importanceLow: '低优·仅记录',
     subtitle: 'YouTube 播客转录与日报控制台',
     loginTitle: '访问控制',
     loginSubtitle: '请输入 key.env 中配置的访问密码。',
@@ -297,6 +301,10 @@ const copy = {
     groups: 'Groups',
     group: 'Group',
     ungrouped: 'Ungrouped',
+    importance: 'Importance',
+    importanceImportant: 'Important·auto',
+    importanceNormal: 'Normal·triage',
+    importanceLow: 'Low·title+link',
     subtitle: 'YouTube podcast transcript and digest console',
     loginTitle: 'Access Control',
     loginSubtitle: 'Enter the access password configured in key.env.',
@@ -1260,6 +1268,15 @@ function SourcesView({
       await onChanged()
     }, `Saved: ${source.display_name || source.source_name}`, source.source_id)
   }
+  const setImportance = async (source: Source, importance: string) => {
+    await runSourceAction(async () => {
+      await api(`/sources/${source.source_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ importance }),
+      })
+      await onChanged()
+    }, undefined, source.source_id)
+  }
   const filteredSources = sources.filter((source) => {
     if (sourceGroupFilterId === 'all') return true
     if (sourceGroupFilterId === 'ungrouped') return !source.group_id
@@ -1527,7 +1544,7 @@ function SourcesView({
         <button className="ghost" disabled={!selectedSourceIds.length} onClick={() => applyBulkGroup(null)}>{t.removeGroup}</button>
       </div>
       <table>
-        <thead><tr><th></th><th>{t.status}</th><th>{t.type}</th><th>{t.sourceName}</th><th>{t.group}</th><th>YouTube ID</th><th>Playlist</th><th>Last Error</th><th>{t.actions}</th></tr></thead>
+        <thead><tr><th></th><th>{t.status}</th><th>{t.type}</th><th>{t.sourceName}</th><th>{t.group}</th><th>{t.importance}</th><th>YouTube ID</th><th>Playlist</th><th>Last Error</th><th>{t.actions}</th></tr></thead>
         <tbody>
           {filteredSources.map((source) => (
             <tr key={source.source_id}>
@@ -1555,6 +1572,13 @@ function SourcesView({
                     {sourceGroupLabel(source, t.ungrouped)}
                   </span>
                 )}
+              </td>
+              <td>
+                <select className="importance-select" value={source.importance || 'normal'} disabled={busySourceId === source.source_id} onChange={(event) => setImportance(source, event.target.value)}>
+                  <option value="important">{t.importanceImportant}</option>
+                  <option value="normal">{t.importanceNormal}</option>
+                  <option value="low">{t.importanceLow}</option>
+                </select>
               </td>
               <td><code>{source.youtube_id}</code></td>
               <td><code>{source.playlist_id || '-'}</code></td>

@@ -545,6 +545,7 @@ class Database:
         display_name: str | None | object = _UNSET,
         enabled: bool | None | object = _UNSET,
         group_id: int | None | object = _UNSET,
+        importance: str | None | object = _UNSET,
     ) -> dict[str, Any]:
         params: list[Any] = []
         assignments: list[str] = []
@@ -557,6 +558,9 @@ class Database:
         if group_id is not _UNSET:
             assignments.append("group_id = ?")
             params.append(group_id)
+        if importance is not _UNSET:
+            assignments.append("importance = ?")
+            params.append(importance)
         if not assignments:
             return self.get_source(source_id)
         params.append(source_id)

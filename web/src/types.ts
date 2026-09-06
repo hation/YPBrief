@@ -53,6 +53,7 @@ export type Source = {
   channel_name?: string | null
   playlist_id?: string | null
   enabled: number
+  importance?: string | null
   group_id?: number | null
   group_name?: string | null
   group_display_name?: string | null

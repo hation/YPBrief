@@ -83,6 +83,7 @@ class SourceUpdate(BaseModel):
     display_name: str | None = None
     enabled: bool | None = None
     group_id: int | None = None
+    importance: str | None = None
 
 
 class SourceGroupCreate(BaseModel):
@@ -643,6 +644,8 @@ def create_app(
                 update_kwargs["enabled"] = payload.enabled
             if "group_id" in fields:
                 update_kwargs["group_id"] = payload.group_id
+            if "importance" in fields:
+                update_kwargs["importance"] = payload.importance
             return db.update_source(source_id, **update_kwargs)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Source not found") from exc

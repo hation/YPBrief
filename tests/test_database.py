@@ -192,3 +192,21 @@ def test_database_migrates_legacy_db_without_new_columns(tmp_path: Path) -> None
         scols = {row[1] for row in conn.execute("PRAGMA table_info(Sources)").fetchall()}
     assert {"selection_status", "triage_score", "triage_at"} <= vcols
     assert "importance" in scols
+
+
+def test_database_update_source_importance(tmp_path: Path) -> None:
+    db = Database(tmp_path / "ypbrief.db")
+    db.initialize()
+    source_id = db.upsert_source(
+        source_type="channel",
+        source_name="Test Channel",
+        youtube_id="UC123",
+        url="https://www.youtube.com/channel/UC123",
+    )
+    assert db.get_source(source_id)["importance"] == "normal"
+
+    db.update_source(source_id, importance="important")
+    assert db.get_source(source_id)["importance"] == "important"
+
+    db.update_source(source_id, importance="low")
+    assert db.get_source(source_id)["importance"] == "low"

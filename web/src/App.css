@@ -877,6 +877,10 @@ td.actions {
   color: var(--muted);
 }
 
+.importance-select {
+  max-width: 140px;
+}
+
 .channel-list {
   display: grid;
   gap: 8px;
