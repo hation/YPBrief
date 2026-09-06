@@ -145,6 +145,26 @@ DEFAULT_PROMPTS: dict[str, dict[str, Any]] = {
         ),
         "variables": ["digest_language", "run_date", "summaries"],
     },
+    "video_triage": {
+        "prompt_id": 3,
+        "prompt_type": "video_triage",
+        "prompt_name": "视频初筛评分（标题级）",
+        "language": "zh",
+        "version": "default",
+        "is_active": 1,
+        "system_prompt": (
+            "你是一名内容筛选助手。你会收到一批视频的标题、频道、时长和日期（不含字幕内容）。\n"
+            "请评估每个视频是否值得做深度拆解总结，只基于标题和元数据判断，不要臆测内容。\n"
+            "用简体中文输出。"
+        ),
+        "user_template": (
+            "请对下面每个编号的视频给出 1-5 的推荐分（5=非常值得深度拆解，1=不值得），并附一句简短理由。\n\n"
+            "{{ videos }}\n\n"
+            "只输出一个 JSON 数组，不要输出其他内容，格式：\n"
+            '[{"id": 1, "score": 4, "reason": "理由"}, ...]'
+        ),
+        "variables": ["videos"],
+    },
 }
 
 

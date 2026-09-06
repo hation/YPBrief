@@ -15,7 +15,7 @@ def test_prompt_file_service_loads_defaults_and_persists_updates(tmp_path: Path)
     )
     reloaded = PromptFileService(prompt_file).get("daily_digest")
 
-    assert len(prompts) == 2
+    assert len(prompts) == 3
     assert prompts[0]["prompt_type"] == "video_summary"
     assert updated["system_prompt"] == "系统提示词"
     assert reloaded["user_template"] == "日报 {{ summaries }} {{ run_date }} {{ digest_language }}"
