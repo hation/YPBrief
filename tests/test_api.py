@@ -3029,3 +3029,30 @@ def test_api_retry_run_video_marks_existing_summary_included(tmp_path: Path) -> 
     assert data["run"]["included_count"] == 1
     assert data["run"]["failed_count"] == 0
     assert data["run"]["skipped_count"] == 0
+
+
+def test_api_triage_candidates_and_select_and_summarize(tmp_path: Path) -> None:
+    db = Database(tmp_path / "ypbrief.db")
+    db.initialize()
+    db.upsert_channel("UC123", "Test Channel", "https://youtube.com/channel/UC123")
+    db.upsert_video("vid1", "UC123", "Episode 1", "https://youtu.be/vid1", video_date="2026-04-24")
+    db.upsert_video("vid2", "UC123", "Episode 2", "https://youtu.be/vid2", video_date="2026-04-25")
+    db.set_video_selection_status("vid1", "pending")
+    db.set_video_selection_status("vid2", "pending")
+    client = TestClient(create_app(db=db))
+
+    pending = client.get("/api/triage/candidates")
+    assert pending.status_code == 200
+    assert {v["video_id"] for v in pending.json()} == {"vid1", "vid2"}
+
+    selected = client.post("/api/videos/select", json={"video_ids": ["vid1"], "action": "selected"})
+    assert selected.status_code == 200
+    assert selected.json()["updated"] == 1
+    assert db.get_video("vid1")["selection_status"] == "selected"
+
+    dismissed = client.post("/api/videos/select", json={"video_ids": ["vid2"], "action": "dismissed"})
+    assert dismissed.json()["updated"] == 1
+    assert db.get_video("vid2")["selection_status"] == "dismissed"
+
+    missing = client.post("/api/videos/select", json={"video_ids": ["nope"]})
+    assert missing.status_code == 404

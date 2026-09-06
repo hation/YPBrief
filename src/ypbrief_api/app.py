@@ -1071,6 +1071,24 @@ def create_app(
             video["has_transcript"] = bool(video["has_transcript"])
         return videos
 
+    @app.get("/api/triage/candidates")
+    def triage_candidates(limit: int = 200) -> list[dict[str, Any]]:
+        return db.list_videos_by_selection_status("pending", limit=limit)
+
+    @app.post("/api/videos/select")
+    def select_videos(payload: dict[str, Any]) -> dict[str, Any]:
+        video_ids = [str(v) for v in (payload.get("video_ids") or [])]
+        action = payload.get("action") or "selected"
+        if action not in {"selected", "dismissed"}:
+            raise HTTPException(status_code=400, detail="action must be selected or dismissed")
+        for video_id in video_ids:
+            try:
+                db.get_video(video_id)
+            except KeyError:
+                raise HTTPException(status_code=404, detail=f"Video not found: {video_id}")
+            db.set_video_selection_status(video_id, action)
+        return {"updated": len(video_ids), "action": action}
+
     @app.post("/api/videos/process-url")
     def process_video_url(payload: VideoProcessUrl) -> dict[str, Any]:
         try:
