@@ -250,7 +250,7 @@ def _discover_yt_dlp_direct_caption_languages(
         "no_warnings": True,
         "noprogress": True,
         "noplaylist": True,
-        "extractor_args": {"youtube": {"player_client": ["android"]}},
+        "remote_components": ["ejs:github"],
     }
     if proxy:
         ydl_opts["proxy"] = proxy
@@ -320,7 +320,7 @@ def _fetch_with_yt_dlp_language_attempt(
             "max_sleep_interval": max_sleep_interval,
             "retries": retries,
             "fragment_retries": retries,
-            "extractor_args": {"youtube": {"player_client": ["android"]}},
+            "remote_components": ["ejs:github"],
         }
         if proxy:
             ydl_opts["proxy"] = proxy
