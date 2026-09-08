@@ -186,10 +186,8 @@ categories:
         url: https://www.youtube.com/@TheRunExperience
         type: channel
         enabled: true
-        importance: important
       - name: Strength Running
         display_name: Strength Running
         url: https://www.youtube.com/@StrengthRunning
         type: channel
         enabled: true
-        importance: important
