@@ -1,0 +1,78 @@
+# YPBrief 频道分类主文件（唯一事实源）
+#
+# 本文件统一管理「分类 → 频道」。修改后运行：
+#   .venv/bin/python scripts/sync_categories.py
+# 会重新生成 sources.yaml（GitHub Actions 与 Web UI 导入均读取该文件）。
+#
+# 新增分类：在 categories 下追加一个块；每个分类的简报参数相互独立。
+
+categories:
+  - name: ai
+    display_name: AI
+    description: AI 领域频道（研究、访谈、教程、官方动态）
+    digest_title: AI 每日简报
+    digest_language: zh
+    run_time: "07:00"
+    timezone: Asia/Shanghai
+    max_videos_per_source: 10
+    sources:
+      - name: Andrej Karpathy
+        display_name: Andrej Karpathy
+        url: https://www.youtube.com/@AndrejKarpathy
+        type: channel
+        enabled: true
+      - name: DeepLearning.AI
+        display_name: DeepLearning.AI
+        url: https://www.youtube.com/@DeepLearningAI
+        type: channel
+        enabled: true
+      - name: Lex Fridman
+        display_name: Lex Fridman
+        url: https://www.youtube.com/@lexfridman
+        type: channel
+        enabled: true
+      - name: Dwarkesh Patel
+        display_name: Dwarkesh Patel
+        url: https://www.youtube.com/@DwarkeshPatel
+        type: channel
+        enabled: true
+      - name: Yannic Kilcher
+        display_name: Yannic Kilcher
+        url: https://www.youtube.com/@YannicKilcher
+        type: channel
+        enabled: true
+      - name: Two Minute Papers
+        display_name: Two Minute Papers
+        url: https://www.youtube.com/@TwoMinutePapers
+        type: channel
+        enabled: true
+      - name: AI Explained
+        display_name: AI Explained
+        url: https://www.youtube.com/@AIExplained-official
+        type: channel
+        enabled: true
+      - name: Hugging Face
+        display_name: Hugging Face
+        url: https://www.youtube.com/@HuggingFace
+        type: channel
+        enabled: true
+      - name: OpenAI
+        display_name: OpenAI
+        url: https://www.youtube.com/@OpenAI
+        type: channel
+        enabled: true
+      - name: Anthropic
+        display_name: Anthropic
+        url: https://www.youtube.com/@anthropic-ai
+        type: channel
+        enabled: true
+      - name: Google DeepMind
+        display_name: Google DeepMind
+        url: https://www.youtube.com/@googledeepmind
+        type: channel
+        enabled: true
+      - name: Hung-yi Lee
+        display_name: 李宏毅 Hung-yi Lee
+        url: https://www.youtube.com/channel/UC2ggjtuuWvxrHHHiaDH1dlQ
+        type: channel
+        enabled: true

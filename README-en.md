@@ -283,6 +283,12 @@ Actions mainly needs three kinds of configuration:
 
 #### 1. sources.yaml
 
+`sources.yaml` is generated from `categories.yaml` at the repository root, which is the single source of truth for categories and channels. To add or adjust a category or channel, edit `categories.yaml` only, then run:
+
+```bash
+.venv/bin/python scripts/sync_categories.py
+```
+
 Place `sources.yaml` in the private repository root to define groups and sources. Example:
 
 ```yaml

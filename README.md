@@ -283,6 +283,12 @@ Actions 主要需要三类配置：
 
 #### 1. sources.yaml
 
+`sources.yaml` 由仓库根目录的 `categories.yaml` 统一生成，后者是分类与频道的唯一事实源。需要新增或调整分类、频道时，只编辑 `categories.yaml`，然后运行：
+
+```bash
+.venv/bin/python scripts/sync_categories.py
+```
+
 `sources.yaml` 放在 private repository 根目录，用来定义分组和来源。示例：
 
 ```yaml
