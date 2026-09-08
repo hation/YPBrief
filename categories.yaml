@@ -77,10 +77,10 @@ categories:
         type: channel
         enabled: true
 
-  - name: running_fitness
-    display_name: 跑步健身
-    description: 跑步与健身频道（训练、马拉松、装备、赛事）
-    digest_title: 跑步健身简报
+  - name: running
+    display_name: 跑步
+    description: 跑步与马拉松频道（训练、备赛、赛事、跑鞋）
+    digest_title: 跑步简报
     digest_language: zh
     run_time: "08:00"
     timezone: Asia/Shanghai
@@ -94,16 +94,6 @@ categories:
       - name: Ben Parkes
         display_name: Ben Parkes
         url: https://www.youtube.com/@BenParkes
-        type: channel
-        enabled: true
-      - name: The Run Experience
-        display_name: The Run Experience
-        url: https://www.youtube.com/@TheRunExperience
-        type: channel
-        enabled: true
-      - name: Strength Running
-        display_name: Strength Running
-        url: https://www.youtube.com/@StrengthRunning
         type: channel
         enabled: true
       - name: Global Triathlon Network
@@ -124,5 +114,75 @@ categories:
       - name: CITIUS MAG
         display_name: CITIUS MAG
         url: https://www.youtube.com/@CitiusMag
+        type: channel
+        enabled: true
+      - name: Seth James DeMoor
+        display_name: Seth James DeMoor
+        url: https://www.youtube.com/@SethJamesDeMoor
+        type: channel
+        enabled: true
+      - name: TheGingerRunner
+        display_name: TheGingerRunner
+        url: https://www.youtube.com/@TheGingerRunner
+        type: channel
+        enabled: true
+      - name: Beau Miles
+        display_name: Beau Miles
+        url: https://www.youtube.com/@BeauMiles
+        type: channel
+        enabled: true
+      - name: Rory Linkletter
+        display_name: Rory Linkletter
+        url: https://www.youtube.com/@LinkletterRory
+        type: channel
+        enabled: true
+      - name: Ultra Marathon Trail Running with Simon
+        display_name: Ultra Marathon Trail Running with Simon
+        url: https://www.youtube.com/@runningwithsimon
+        type: channel
+        enabled: true
+      - name: Philly Bowden
+        display_name: Philly Bowden
+        url: https://www.youtube.com/@PhilyBowden
+        type: channel
+        enabled: true
+      - name: 哲睿Jerry
+        display_name: 哲睿Jerry
+        url: https://www.youtube.com/@coachjerry
+        type: channel
+        enabled: true
+      - name: 豹大王 Run
+        display_name: 豹大王 Run
+        url: https://www.youtube.com/@baodawang
+        type: channel
+        enabled: true
+      - name: Sagasu Running
+        display_name: Sagasu Running
+        url: https://www.youtube.com/@SagasuRunning
+        type: channel
+        enabled: true
+      - name: Tomo Runs Taiwan!
+        display_name: Tomo Runs Taiwan!
+        url: https://www.youtube.com/channel/UCTS5SJfupJ_hYHKOi4ui_MA
+        type: channel
+        enabled: true
+
+  - name: fitness
+    display_name: 健身
+    description: 身体训练、力量与防伤频道
+    digest_title: 健身简报
+    digest_language: zh
+    run_time: "08:30"
+    timezone: Asia/Shanghai
+    max_videos_per_source: 10
+    sources:
+      - name: The Run Experience
+        display_name: The Run Experience
+        url: https://www.youtube.com/@TheRunExperience
+        type: channel
+        enabled: true
+      - name: Strength Running
+        display_name: Strength Running
+        url: https://www.youtube.com/@StrengthRunning
         type: channel
         enabled: true
