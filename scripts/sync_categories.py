@@ -30,7 +30,7 @@ GROUP_FIELDS = (
     "timezone",
     "max_videos_per_source",
 )
-SOURCE_FIELDS = ("type", "name", "display_name", "url", "enabled", "group")
+SOURCE_FIELDS = ("type", "name", "display_name", "url", "enabled", "importance", "group")
 
 
 def _validate(data: dict) -> None:
@@ -88,6 +88,7 @@ def _build_groups_and_sources(data: dict) -> tuple[list[dict], list[dict]]:
                 "display_name": src.get("display_name"),
                 "url": src.get("url"),
                 "enabled": bool(src.get("enabled", True)),
+                "importance": src.get("importance", "normal"),
                 "group": cat["name"],
             }
             sources.append({k: v for k, v in item.items() if v is not None})

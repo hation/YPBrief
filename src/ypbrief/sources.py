@@ -43,14 +43,15 @@ class SourceService:
         enabled: bool = True,
         group_id: int | None = None,
         skip_existing: bool = False,
+        importance: str | None = None,
     ) -> dict[str, Any]:
         resolved_type = source_type or detect_source_type(source_input)
         if resolved_type == "channel":
-            source_id = self._add_channel(source_input, name=name, display_name=display_name, enabled=enabled, skip_existing=skip_existing)
+            source_id = self._add_channel(source_input, name=name, display_name=display_name, enabled=enabled, skip_existing=skip_existing, importance=importance)
         elif resolved_type == "playlist":
-            source_id = self._add_playlist(source_input, name=name, display_name=display_name, enabled=enabled, skip_existing=skip_existing)
+            source_id = self._add_playlist(source_input, name=name, display_name=display_name, enabled=enabled, skip_existing=skip_existing, importance=importance)
         elif resolved_type == "video":
-            source_id = self._add_video(source_input, name=name, display_name=display_name, enabled=enabled, skip_existing=skip_existing)
+            source_id = self._add_video(source_input, name=name, display_name=display_name, enabled=enabled, skip_existing=skip_existing, importance=importance)
         else:
             raise ValueError(f"Unsupported source type: {resolved_type}")
         if group_id is not None:
@@ -160,6 +161,7 @@ class SourceService:
                 display_name=item.get("display_name") or item.get("name"),
                 enabled=bool(item.get("enabled", True)),
                 group_id=group_id,
+                importance=item.get("importance"),
             )
             count += 1
         return count
@@ -206,6 +208,7 @@ class SourceService:
         display_name: str | None,
         enabled: bool,
         skip_existing: bool = False,
+        importance: str | None = None,
     ) -> int:
         channel = self.youtube.resolve_channel(source_input)
         existing = self.db.get_source_by_identity("channel", channel.channel_id)
@@ -227,6 +230,7 @@ class SourceService:
             channel_id=channel.channel_id,
             channel_name=channel.channel_name,
             enabled=enabled,
+            importance=importance or "normal",
         )
 
     def _add_playlist(
@@ -236,6 +240,7 @@ class SourceService:
         display_name: str | None,
         enabled: bool,
         skip_existing: bool = False,
+        importance: str | None = None,
     ) -> int:
         playlist = self.youtube.get_playlist(source_input)
         existing = self.db.get_source_by_identity("playlist", playlist.playlist_id)
@@ -251,6 +256,7 @@ class SourceService:
             channel_name=playlist.channel_name,
             playlist_id=playlist.playlist_id,
             enabled=enabled,
+            importance=importance or "normal",
         )
 
     def _add_video(
@@ -260,6 +266,7 @@ class SourceService:
         display_name: str | None,
         enabled: bool,
         skip_existing: bool = False,
+        importance: str | None = None,
     ) -> int:
         video = self.youtube.get_video(source_input)
         existing = self.db.get_source_by_identity("video", video.video_id)
@@ -274,6 +281,7 @@ class SourceService:
             channel_id=video.channel_id,
             channel_name=video.channel_name,
             enabled=enabled,
+            importance=importance or "normal",
         )
 
 

@@ -4,6 +4,11 @@
 #   .venv/bin/python scripts/sync_categories.py
 # 会重新生成 sources.yaml（GitHub Actions 与 Web UI 导入均读取该文件）。
 #
+# 每个频道可用 importance 字段（可选，默认 normal）：
+#   - important : 自动总结并纳入简报
+#   - normal    : 只进入筛选/待选，手动触发后总结
+#   - low       : 仅标题+链接，不总结
+#
 # 新增分类：在 categories 下追加一个块；每个分类的简报参数相互独立。
 
 categories:
@@ -181,8 +186,10 @@ categories:
         url: https://www.youtube.com/@TheRunExperience
         type: channel
         enabled: true
+        importance: important
       - name: Strength Running
         display_name: Strength Running
         url: https://www.youtube.com/@StrengthRunning
         type: channel
         enabled: true
+        importance: important
