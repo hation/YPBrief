@@ -76,3 +76,53 @@ categories:
         url: https://www.youtube.com/channel/UC2ggjtuuWvxrHHHiaDH1dlQ
         type: channel
         enabled: true
+
+  - name: running_fitness
+    display_name: 跑步健身
+    description: 跑步与健身频道（训练、马拉松、装备、赛事）
+    digest_title: 跑步健身简报
+    digest_language: zh
+    run_time: "08:00"
+    timezone: Asia/Shanghai
+    max_videos_per_source: 5
+    sources:
+      - name: The Running Channel
+        display_name: The Running Channel
+        url: https://www.youtube.com/channel/UCX7dV4OPDSutwMUauSD5AAA
+        type: channel
+        enabled: true
+      - name: Ben Parkes
+        display_name: Ben Parkes
+        url: https://www.youtube.com/@BenParkes
+        type: channel
+        enabled: true
+      - name: The Run Experience
+        display_name: The Run Experience
+        url: https://www.youtube.com/@TheRunExperience
+        type: channel
+        enabled: true
+      - name: Strength Running
+        display_name: Strength Running
+        url: https://www.youtube.com/@StrengthRunning
+        type: channel
+        enabled: true
+      - name: Global Triathlon Network
+        display_name: Global Triathlon Network
+        url: https://www.youtube.com/@gtn
+        type: channel
+        enabled: true
+      - name: Total Running Productions
+        display_name: Total Running Productions
+        url: https://www.youtube.com/@TotalRunningProductions
+        type: channel
+        enabled: true
+      - name: Kofuzi
+        display_name: Kofuzi
+        url: https://www.youtube.com/@Kofuzi
+        type: channel
+        enabled: true
+      - name: CITIUS MAG
+        display_name: CITIUS MAG
+        url: https://www.youtube.com/@CitiusMag
+        type: channel
+        enabled: true
